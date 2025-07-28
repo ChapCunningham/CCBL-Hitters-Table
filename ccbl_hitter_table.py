@@ -54,24 +54,27 @@ st.markdown("""
     .stSelectbox > div > div {
         background-color: white;
     }
+    .metric-container {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# Hardcoded CSV URL
+CSV_URL = "https://drive.google.com/uc?id=1GaEaWzS7JIVw7oTx4W4ptw42F17yLe2f&export=download"
+
 @st.cache_data(ttl=300)  # Cache for 5 minutes
-def load_csv_from_drive(drive_url):
-    """Load CSV from Google Drive shareable link"""
+def load_csv_data():
+    """Load CSV from the hardcoded Google Drive link"""
     try:
-        if '/file/d/' in drive_url:
-            file_id = drive_url.split('/file/d/')[1].split('/')[0]
-            direct_url = f"https://drive.google.com/file/d/1GaEaWzS7JIVw7oTx4W4ptw42F17yLe2f/view?usp=sharing"
-        else:
-            direct_url = drive_url
-        
-        response = requests.get(direct_url)
+        response = requests.get(CSV_URL)
         response.raise_for_status()
         return pd.read_csv(StringIO(response.text))
     except Exception as e:
-        st.error(f"Error loading CSV: {str(e)}")
+        st.error(f"Error loading data: {str(e)}")
         return None
 
 def load_and_process_csv(df, split_by_handedness=False):
@@ -363,84 +366,62 @@ def create_table_display(df, title, subtitle, prefix=""):
     return display_df
 
 def main():
-    # Sidebar
-    st.sidebar.title("⚾ CCBL Stats Dashboard")
+    # Header
+    st.title("⚾ CCBL Live Hitting Statistics")
     
-    # Google Drive URL input
-    drive_url = st.sidebar.text_input(
-        "Google Drive CSV URL:",
-        placeholder="https://drive.google.com/file/d/YOUR_FILE_ID/view?usp=sharing",
-        help="Make sure your CSV is set to 'Anyone with the link can view'"
-    )
+    # Load data
+    with st.spinner("Loading latest CCBL data..."):
+        raw_df = load_csv_data()
     
-    # Refresh button
-    if st.sidebar.button("🔄 Refresh Data"):
-        st.cache_data.clear()
-        st.experimental_rerun()
-    
-    # Auto-refresh option
-    auto_refresh = st.sidebar.checkbox("Auto-refresh (5 min)", value=True)
-    
-    if auto_refresh:
-        st.sidebar.write("⏱️ Data refreshes every 5 minutes")
-    
-    if drive_url:
-        # Load data
-        with st.spinner("Loading data from Google Drive..."):
-            raw_df = load_csv_from_drive(drive_url)
+    if raw_df is not None:
+        # Sidebar with summary stats
+        st.sidebar.title("📊 Data Summary")
+        st.sidebar.metric("Total Records", f"{len(raw_df):,}")
+        st.sidebar.metric("Last Updated", pd.Timestamp.now().strftime('%Y-%m-%d %H:%M'))
         
-        if raw_df is not None:
-            # Create tabs
-            tab1, tab2 = st.tabs(["📊 Overall Stats", "🔄 By Handedness"])
-            
-            with tab1:
-                # Process overall stats
-                try:
-                    overall_stats = load_and_process_csv(raw_df, split_by_handedness=False)
-                    create_table_display(
-                        overall_stats,
-                        "CCBL Live Hitting Leaders",
-                        "Cape Cod Baseball League Statistics",
-                        "overall"
-                    )
-                except Exception as e:
-                    st.error(f"Error processing overall stats: {str(e)}")
-            
-            with tab2:
-                # Process handedness splits
-                try:
-                    handed_stats = load_and_process_csv(raw_df, split_by_handedness=True)
-                    create_table_display(
-                        handed_stats,
-                        "CCBL Live Hitting Leaders - By Handedness",
-                        "Split by Pitcher Handedness",
-                        "handed"
-                    )
-                except Exception as e:
-                    st.error(f"Error processing handedness stats: {str(e)}")
-            
-            # Sidebar stats
-            st.sidebar.markdown("---")
-            st.sidebar.markdown("**Data Summary:**")
-            st.sidebar.write(f"Raw Records: {len(raw_df):,}")
-            st.sidebar.write(f"Last Updated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
-            
+        # Refresh button
+        if st.sidebar.button("🔄 Refresh Data"):
+            st.cache_data.clear()
+            st.experimental_rerun()
+        
+        # Create tabs
+        tab1, tab2 = st.tabs(["📊 Overall Stats", "🔄 By Handedness"])
+        
+        with tab1:
+            # Process overall stats
+            try:
+                overall_stats = load_and_process_csv(raw_df, split_by_handedness=False)
+                st.sidebar.metric("Total Players", len(overall_stats))
+                
+                create_table_display(
+                    overall_stats,
+                    "CCBL Live Hitting Leaders",
+                    "Cape Cod Baseball League Statistics",
+                    "overall"
+                )
+            except Exception as e:
+                st.error(f"Error processing overall stats: {str(e)}")
+        
+        with tab2:
+            # Process handedness splits
+            try:
+                handed_stats = load_and_process_csv(raw_df, split_by_handedness=True)
+                
+                create_table_display(
+                    handed_stats,
+                    "CCBL Live Hitting Leaders - By Handedness",
+                    "Split by Pitcher Handedness",
+                    "handed"
+                )
+            except Exception as e:
+                st.error(f"Error processing handedness stats: {str(e)}")
+                
+        # Auto-refresh notification
+        st.sidebar.markdown("---")
+        st.sidebar.info("⏱️ Data auto-refreshes every 5 minutes")
+        
     else:
-        st.info("👈 Please enter your Google Drive CSV URL in the sidebar to get started.")
-        
-        # Instructions
-        st.markdown("""
-        ## How to get your Google Drive CSV link:
-        
-        1. Upload your CSV file to Google Drive
-        2. Right-click on the file and select "Share"
-        3. Change permissions to "Anyone with the link can view"
-        4. Copy the shareable link
-        5. Paste it in the sidebar
-        
-        The link should look like:
-        `https://drive.google.com/file/d/1ABC123.../view?usp=sharing`
-        """)
+        st.error("Unable to load data. Please check the data source.")
 
 if __name__ == "__main__":
     main()
