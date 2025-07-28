@@ -63,7 +63,7 @@ def load_csv_from_drive(drive_url):
     try:
         if '/file/d/' in drive_url:
             file_id = drive_url.split('/file/d/')[1].split('/')[0]
-            direct_url = f"https://drive.google.com/uc?id={file_id}&export=download"
+            direct_url = f"https://drive.google.com/file/d/1GaEaWzS7JIVw7oTx4W4ptw42F17yLe2f/view?usp=sharing"
         else:
             direct_url = drive_url
         
